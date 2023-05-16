@@ -255,7 +255,6 @@ class Patch {
     }
 
     setConditionUV(uv, condition) {
-        console.log("Set condition", uv.u, uv.v, condition);
         this.setCondition(uv.u, uv.v, condition);
     }
 
@@ -443,13 +442,29 @@ function half_cylinder(n, rfn, hfn) {
     return [leftPatch, rightPatch];
 }
 
+function square_pair(n) {
+    const leftPatch = new Patch(n);
+    const rightPatch = new Patch(n);
+    for (let i = 0; i <= n; i++) {
+        leftPatch.setCondition(i, 0, pointFn(() => p3d(0, i/n, 0)));
+        leftPatch.setCondition(n, i, pointFn(() => p3d(i/n, 1, 0)));
+        leftPatch.setCondition(i, n, pointFn(() => p3d(1, i/n, 0)));
+        rightPatch.setCondition(i, 0, pointFn(() => p3d(0, 0, i/n)));
+        rightPatch.setCondition(n, i, pointFn(() => p3d(i/n, 0, 1)));
+        rightPatch.setCondition(i, n, pointFn(() => p3d(1, 0, i/n)));
+    }
+    gluePatches(leftPatch, rightPatch, n, uv(0, 0), uv(0, 1), uv(1, 0), uv(0, 0), uv(0, 1), uv(1, 0));
+    return [leftPatch, rightPatch];
+}
+
 export function renderResult() {
     const cos = Math.cos;
     const sin = Math.sin;
     let t = 0;
-    const patches = half_cylinder(20, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
+    // const patches = half_cylinder(20, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
     // const patches = cylinder(20, () => 1, () => 1, () => .5);
     // const patches = half_cylinder(20, () => 1, () => .5);
+    const patches = square_pair(20);
     const { scene, camera, renderer } = createScene();
     patches.forEach(patch => {
         scene.add(patch.mesh);
