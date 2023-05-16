@@ -101,6 +101,10 @@ function p3d(x, y, z) {
     return new Point3D(x, y, z);
 }
 
+function between(P, Q, ratio) {
+    return P.add(Q.subtract(P).multiply(ratio));
+}
+
 function nearestPointOnSegment(point, segmentStart, segmentEnd) {
     const segment = segmentEnd.subtract(segmentStart);
     const segmentLength = segment.magnitude();
@@ -182,7 +186,7 @@ class Condition {
     }
 }
 
-function condition(patch, row, column, condition) {
+function make_condition(patch, row, column, condition) {
     return new Condition(
         new PatchPoint(patch, 3* (row * (patch.mesh.geometry.parameters.widthSegments + 1) + column)), condition);
 }
@@ -193,18 +197,12 @@ class Patch {
         this.mesh = mesh;
         this.wireframe = wireframe;
         this.n = n;
+        this.nextArray = new Float32Array(this.mesh.geometry.attributes.position.array);
+        this.conditions = [];
     }
 
-    setConditions(corners, edges) {
-        const n = this.n;
-        this.conditions = [condition(this, 0, 0, corners[0]), condition(this, 0, n, corners[1]), condition(this, n, n, corners[2]), condition(this, n, 0, corners[3])];
-        for (let i = 1; i < n; i++) {
-            this.conditions.push(condition(this, 0, i, edges[0]));
-            this.conditions.push(condition(this, i, n, edges[1]));
-            this.conditions.push(condition(this, n, i, edges[2]));
-            this.conditions.push(condition(this, i, 0, edges[3]));
-        }
-        this.nextArray = new Float32Array(this.mesh.geometry.attributes.position.array);
+    setCondition(row, column, condition) {
+        this.conditions.push(make_condition(this, row, column, condition));
     }
 
     apply() {
@@ -272,15 +270,19 @@ export function addMouseRotation(camera, renderer) {
 }
 
 export function renderResult() {
-    const patch = new Patch(25);
-    patch.setConditions(
-        [fixCorner(p3d(-1, -1, 1)), fixCorner(p3d(-1, 1, -1)), fixCorner(p3d(1, 1, 1)), fixCorner(p3d(1, -1, -1))], 
-        [
-            segmentEdge(p3d(-1, -1, 1), p3d(-1, 1, -1)), 
-            segmentEdge(p3d(-1, 1, -1), p3d(1, 1, 1)),
-            segmentEdge(p3d(1, 1, 1), p3d(1, -1, -1)),
-            segmentEdge(p3d(1, -1, -1), p3d(-1, -1, 1))
-        ]);
+    const n = 20;
+    const patch = new Patch(n);
+    const A = p3d(-1, -1, 1);
+    const B = p3d(-1, 1, -1);
+    const C = p3d(1, 1, 1);
+    const D = p3d(1, -1, -1);
+    for (let i = 0; i <= n; i++) {
+        const ratio = i / n;
+        patch.setCondition(0, i, fixCorner(between(A, B, ratio)));
+        patch.setCondition(i, n, fixCorner(between(B, C, ratio)));
+        patch.setCondition(n, n-i, fixCorner(between(C, D, ratio)));
+        patch.setCondition(n-i, 0, fixCorner(between(D, A, ratio)));
+    }
     const { scene, camera, renderer } = createScene();
     scene.add(patch.mesh);
     scene.add(patch.wireframe);
