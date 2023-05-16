@@ -88,7 +88,7 @@ class Point3D {
         return this.divide(this.magnitude());
     }
 
-    seminormalize() {
+    get_dilation() {
         return this;
     }    
 
@@ -135,10 +135,8 @@ function nearestPointOnSegment(point, segmentStart, segmentEnd) {
     }
 }
 
-let pre_normalize = true;
-
 function averageOfPoints(points, center) {
-    const sum = points.reduce((sum, point) => sum.add(pre_normalize ? point.subtract(center).seminormalize() : point.subtract(center)), new Point3D(0, 0, 0));
+    const sum = points.reduce((sum, point) => sum.add(point.subtract(center).get_dilation()), new Point3D(0, 0, 0));
     return center.add(sum.divide(points.length));
 }
 
@@ -486,19 +484,23 @@ function fixPatchEdge(patch, edge, start, end) {
     const fix = fix_params[edge];
     for (let i = 0; i <= n; i++) {
         const here = fix.start.add(fix.dir.scalar(i));
-        patch.setConditionUV(here, fixCorner(between(start, end, i/n)));
+        patch.setConditionUV(here, pointFn(() => between(start(), end(), i/n)));
     }
 }
 
+let t = 0;
+
 function square_trio(n) {
-    const A = p3d(0, 0, 0);
-    const B = p3d(1, 0, 0);
-    const C = p3d(1, 1, 0);
-    const D = p3d(0, 1, 0);
-    const E = p3d(0, 0, 1);
-    const F = p3d(1, 0, 1);
-    const G = p3d(1, 1, 1);
-    const H = p3d(0, 1, 1);
+    const A = () => p3d(0, 0, 0);
+    const B = () => p3d(1, 0, 0);
+    const C = () => p3d(1, 1, 0);
+    const D = () => p3d(0, 1, 0);
+    // const E = () => p3d(0, 0, 1 + 0.2 * Math.sin(t * 50));
+    // const F = () => p3d(1, 0, 1 + 0.2 * Math.cos(t * 50));
+    const E = () => p3d(0, 0, 1);
+    const F = () => p3d(1, 0, 1);
+    const G = () => p3d(1, 1, 1);
+    const H = () => p3d(0, 1, 1);
 
     const bottom = new Patch(n);
     const right = new Patch(n);
@@ -525,9 +527,8 @@ function square_trio(n) {
 export function renderResult() {
     const cos = Math.cos;
     const sin = Math.sin;
-    let t = 0;
     // const patches = half_cylinder(20, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
-    // const patches = cylinder(20, () => 1, () => 1, () => .5);
+    // const patches = cylinder(20, () => 1, () => 1, () => 1 + 0.5 * sin(t*20));
     // const patches = half_cylinder(20, () => 1, () => .5);
     const patches = square_trio(20);
     const { scene, camera, renderer } = createScene();
@@ -542,7 +543,6 @@ export function renderResult() {
     const animate = function () {
         requestAnimationFrame(animate);
         t += .001;
-        if (t > 0.2) pre_normalize = true;
         patches.forEach(patch => patch.apply());
         patches.forEach(patch => patch.update());
         renderer.render(scene, camera);
