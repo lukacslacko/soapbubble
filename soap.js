@@ -21,21 +21,21 @@ export function createScene() {
 
 export function createMesh(n = 20) {
     const geometry = new THREE.PlaneGeometry(2, 2, n, n);
-    const wireframeMaterial = new THREE.MeshBasicMaterial({color: 0xffffff, wireframe: true});
+    const wireframeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
     const material = new THREE.MeshNormalMaterial();
     // Make material double sided.
     material.side = THREE.DoubleSide;
     const mesh = new THREE.Mesh(geometry, material);
     const wireframe = new THREE.Mesh(geometry, wireframeMaterial);
-    
-    return {mesh, wireframe};
+
+    return { mesh, wireframe };
 }
 
 // Make the mesh wave.
 export function waveMesh(mesh, t) {
     let arr = mesh.geometry.attributes.position.array;
     for (let i = 0; i < arr.length; i += 3) {
-        arr[i + 2] = (1 - arr[i]) * Math.sin(arr[i] * 10 + arr[i+1] * arr[i] + t) / 8;
+        arr[i + 2] = (1 - arr[i]) * Math.sin(arr[i] * 10 + arr[i + 1] * arr[i] + t) / 8;
     }
     mesh.geometry.attributes.position.needsUpdate = true;
     mesh.geometry.computeVertexNormals();
@@ -188,17 +188,22 @@ class Condition {
 
 function make_condition(patch, row, column, condition) {
     return new Condition(
-        new PatchPoint(patch, 3* (row * (patch.mesh.geometry.parameters.widthSegments + 1) + column)), condition);
+        new PatchPoint(patch, 3 * (row * (patch.mesh.geometry.parameters.widthSegments + 1) + column)), condition);
 }
 
 class Patch {
     constructor(n) {
-        const {mesh, wireframe} = createMesh(n);
+        const { mesh, wireframe } = createMesh(n);
         this.mesh = mesh;
         this.wireframe = wireframe;
         this.n = n;
         this.nextArray = new Float32Array(this.mesh.geometry.attributes.position.array);
         this.conditions = [];
+    }
+
+    setConditionUV(uv, condition) {
+        console.log("Set condition", uv.u, uv.v, condition);
+        this.setCondition(uv.u, uv.v, condition);
     }
 
     setCondition(row, column, condition) {
@@ -211,9 +216,9 @@ class Patch {
                 for (let d = 0; d < 3; d++) {
                     const index = (x * (this.n + 1) + y) * 3 + d;
                     this.nextArray[index] = (
-                        this.mesh.geometry.attributes.position.array[index - 3] + 
-                        this.mesh.geometry.attributes.position.array[index + 3] + 
-                        this.mesh.geometry.attributes.position.array[index - (this.n + 1) * 3] + 
+                        this.mesh.geometry.attributes.position.array[index - 3] +
+                        this.mesh.geometry.attributes.position.array[index + 3] +
+                        this.mesh.geometry.attributes.position.array[index - (this.n + 1) * 3] +
                         this.mesh.geometry.attributes.position.array[index + (this.n + 1) * 3]) / 4;
                 }
             }
@@ -234,6 +239,12 @@ class Patch {
         this.mesh.geometry.attributes.position.needsUpdate = true;
         this.mesh.geometry.computeVertexNormals();
         this.wireframe.geometry.attributes.position.needsUpdate = true;
+    }
+
+    getPatchPoint(uv) {
+        const row = uv.u;
+        const column = uv.v;
+        return new PatchPoint(this, 3 * (row * (this.mesh.geometry.parameters.widthSegments + 1) + column));
     }
 }
 
@@ -269,8 +280,7 @@ export function addMouseRotation(camera, renderer) {
     controls.enableZoom = true;
 }
 
-export function renderResult() {
-    const n = 20;
+function hyperboloid(n) {
     const patch = new Patch(n);
     const A = p3d(-1, -1, 1);
     const B = p3d(-1, 1, -1);
@@ -280,22 +290,86 @@ export function renderResult() {
         const ratio = i / n;
         patch.setCondition(0, i, fixCorner(between(A, B, ratio)));
         patch.setCondition(i, n, fixCorner(between(B, C, ratio)));
-        patch.setCondition(n, n-i, fixCorner(between(C, D, ratio)));
-        patch.setCondition(n-i, 0, fixCorner(between(D, A, ratio)));
+        patch.setCondition(n, n - i, fixCorner(between(C, D, ratio)));
+        patch.setCondition(n - i, 0, fixCorner(between(D, A, ratio)));
     }
+    return [patch];
+}
+
+class UV {
+    constructor(u, v) {
+        this.u = u;
+        this.v = v;
+    }
+
+    add(uv) {
+        return new UV(this.u + uv.u, this.v + uv.v);
+    }
+
+    sub(uv) {
+        return new UV(this.u - uv.u, this.v - uv.v);
+    }
+
+    scalar(scalar) {
+        return new UV(this.u * scalar, this.v * scalar);
+    }
+}
+
+function uv(u, v) {
+    return new UV(u, v);
+}
+
+function gluePatches(leftPatch, rightPatch, n, leftStart, leftDir, leftOrtho, rightStart, rightDir, rightOrtho) {
+    for (let i = 1; i < n; i++) {
+        const leftHere = leftStart.add(leftDir.scalar(i));
+        const leftInside = leftHere.add(leftOrtho);
+        const rightHere = rightStart.add(rightDir.scalar(i));
+        const rightInside = rightHere.add(rightOrtho);
+        const corner = new AverageCorner([
+            leftPatch.getPatchPoint(leftHere.add(leftDir)), 
+            leftPatch.getPatchPoint(leftHere.sub(leftDir)),
+            leftPatch.getPatchPoint(leftInside),
+            rightPatch.getPatchPoint(rightInside)]);
+        leftPatch.setConditionUV(leftHere, corner);
+        rightPatch.setConditionUV(rightHere, corner);
+    }
+}
+
+function cylinder(n, r, h) {
+    const leftPatch = new Patch(n);
+    const rightPatch = new Patch(n);
+    const sin = Math.sin;
+    const cos = Math.cos;
+    const pi = Math.PI;
+    for (let i = 0; i <= n; i++) {
+        const ratio = i / n;
+        leftPatch.setCondition(0, i, fixCorner(p3d(r * cos(pi * ratio), r * sin(pi * ratio), h)));
+        leftPatch.setCondition(n, i, fixCorner(p3d(r * cos(pi * ratio), r * sin(pi * ratio), -h)));
+        rightPatch.setCondition(0, i, fixCorner(p3d(r * cos(pi + pi * ratio), r * sin(pi + pi * ratio), h)));
+        rightPatch.setCondition(n, i, fixCorner(p3d(r * cos(pi + pi * ratio), r * sin(pi + pi * ratio), -h)));
+    }
+    gluePatches(leftPatch, rightPatch, n, uv(0, n), uv(1, 0), uv(0, -1), uv(0, 0), uv(1, 0), uv(0, 1));
+    gluePatches(leftPatch, rightPatch, n, uv(0, 0), uv(1, 0), uv(0, 1), uv(0, n), uv(1, 0), uv(0, -1));
+    return [leftPatch, rightPatch];
+}
+
+export function renderResult() {
+    const patches = cylinder(20, 1, 1);
     const { scene, camera, renderer } = createScene();
-    scene.add(patch.mesh);
-    scene.add(patch.wireframe);
+    patches.forEach(patch => {
+        scene.add(patch.mesh);
+        // scene.add(patch.wireframe);
+    });
     addMouseRotation(camera, renderer);
     camera.position.z = 5;
     camera.position.y = 0;
     // Trivial animation.
     const animate = function () {
         requestAnimationFrame(animate);
-        patch.apply();
-        patch.update();
+        patches.forEach(patch => patch.apply());
+        patches.forEach(patch => patch.update());
         renderer.render(scene, camera);
-    }
+    };
     animate();
 }
 
