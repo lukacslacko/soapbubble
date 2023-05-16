@@ -27,8 +27,8 @@ export function createMesh(n = 20) {
     // Make material double sided.
     material.side = THREE.DoubleSide;
     // Apply some transparency to the material.
-    material.transparent = true;
-    material.opacity = .5;
+    // material.transparent = true;
+    // material.opacity = .5;
     const mesh = new THREE.Mesh(geometry, material);
     const wireframe = new THREE.Mesh(geometry, wireframeMaterial);
 
@@ -88,6 +88,17 @@ class Point3D {
         return this.divide(this.magnitude());
     }
 
+    seminormalize() {
+        return this;
+    }    
+
+    static noise(amount = 1) {
+        return new Point3D(
+            amount * (Math.random() - .5),
+            amount * (Math.random() - .5),
+            amount * (Math.random() - .5));
+    }
+
     dot(point) {
         return this.x * point.x + this.y * point.y + this.z * point.z;
     }
@@ -124,9 +135,11 @@ function nearestPointOnSegment(point, segmentStart, segmentEnd) {
     }
 }
 
-function averageOfPoints(points) {
-    const sum = points.reduce((sum, point) => sum.add(point), new Point3D(0, 0, 0));
-    return sum.divide(points.length);
+let pre_normalize = true;
+
+function averageOfPoints(points, center) {
+    const sum = points.reduce((sum, point) => sum.add(pre_normalize ? point.subtract(center).seminormalize() : point.subtract(center)), new Point3D(0, 0, 0));
+    return center.add(sum.divide(points.length));
 }
 
 class FixCorner {
@@ -164,7 +177,7 @@ class AverageCorner {
 
     apply(patch_point) {
         const points = this.patch_points.map(patch_point => patch_point.getPoint());
-        const average = averageOfPoints(points);
+        const average = averageOfPoints(points, patch_point.getPoint());
         patch_point.setPoint(average);
     }
 }
@@ -179,7 +192,7 @@ class SegmentEdge {
         let indices = [patch_point.index - 3, patch_point.index + 3, patch_point.index - (patch_point.patch.n + 1) * 3, patch_point.index + (patch_point.patch.n + 1) * 3];
         indices = indices.filter(index => index >= 0 && index < patch_point.patch.mesh.geometry.attributes.position.array.length);
         const points = indices.map(index => new PatchPoint(patch_point.patch, index).getPoint());
-        const point = averageOfPoints(points);
+        const point = averageOfPoints(points, patch_point.getPoint());
         const nearest = nearestPointOnSegment(point, this.segment_start, this.segment_end);
         patch_point.setPoint(nearest);
     }
@@ -203,7 +216,7 @@ class MirrorEdge {
         const inside_mirror = inside_point.add(this.plane_normal.multiply(2 * (this.plane_point.subtract(inside_point).dot(this.plane_normal))));
         points.push(inside_mirror);
         points.push(inside_point);
-        patch_point.setPoint(averageOfPoints(points));
+        patch_point.setPoint(averageOfPoints(points, patch_point.getPoint()));
     }
 }
 
@@ -253,14 +266,13 @@ class Patch {
     apply() {
         for (let x = 1; x < this.n; x++) {
             for (let y = 1; y < this.n; y++) {
-                for (let d = 0; d < 3; d++) {
-                    const index = (x * (this.n + 1) + y) * 3 + d;
-                    this.nextArray[index] = (
-                        this.mesh.geometry.attributes.position.array[index - 3] +
-                        this.mesh.geometry.attributes.position.array[index + 3] +
-                        this.mesh.geometry.attributes.position.array[index - (this.n + 1) * 3] +
-                        this.mesh.geometry.attributes.position.array[index + (this.n + 1) * 3]) / 4;
-                }
+                const points = [this.getPatchPoint(uv(x - 1, y)), this.getPatchPoint(uv(x + 1, y)), this.getPatchPoint(uv(x, y - 1)), this.getPatchPoint(uv(x, y + 1))];
+                const actual_points = points.map(point => point.getPoint());
+                const average = averageOfPoints(actual_points, this.getPatchPoint(uv(x, y)).getPoint());
+                const index = (x * (this.n + 1) + y) * 3;
+                this.nextArray[index] = average.x;
+                this.nextArray[index + 1] = average.y;
+                this.nextArray[index + 2] = average.z;
             }
         }
         this.conditions.forEach(condition => condition.apply());
@@ -436,6 +448,8 @@ export function renderResult() {
     const sin = Math.sin;
     let t = 0;
     const patches = half_cylinder(20, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
+    // const patches = cylinder(20, () => 1, () => 1, () => .5);
+    // const patches = half_cylinder(20, () => 1, () => .5);
     const { scene, camera, renderer } = createScene();
     patches.forEach(patch => {
         scene.add(patch.mesh);
@@ -448,6 +462,7 @@ export function renderResult() {
     const animate = function () {
         requestAnimationFrame(animate);
         t += .001;
+        if (t > 0.2) pre_normalize = true;
         patches.forEach(patch => patch.apply());
         patches.forEach(patch => patch.update());
         renderer.render(scene, camera);
