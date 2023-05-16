@@ -457,6 +457,71 @@ function square_pair(n) {
     return [leftPatch, rightPatch];
 }
 
+const TOP = 0;
+const BOTTOM = 1;
+const LEFT = 2;
+const RIGHT = 3;
+
+function gluePatchEdges(patch1, edge1, patch2, edge2) {
+    const n = patch1.n;
+    const glue_params = {
+        [TOP]: {start: uv(0, n), dir: uv(1, 0), ortho: uv(0, -1)},
+        [BOTTOM]: {start: uv(0, 0), dir: uv(1, 0), ortho: uv(0, 1)},
+        [LEFT]: {start: uv(0, 0), dir: uv(0, 1), ortho: uv(1, 0)},
+        [RIGHT]: {start: uv(n, 0), dir: uv(0, 1), ortho: uv(-1, 0)},
+    };
+    const glue1 = glue_params[edge1];
+    const glue2 = glue_params[edge2];
+    gluePatches(patch1, patch2, n, glue1.start, glue1.dir, glue1.ortho, glue2.start, glue2.dir, glue2.ortho);
+}
+
+function fixPatchEdge(patch, edge, start, end) {
+    const n = patch.n;
+    const fix_params = {
+        [TOP]: {start: uv(0, n), dir: uv(1, 0)},
+        [BOTTOM]: {start: uv(0, 0), dir: uv(1, 0)},
+        [LEFT]: {start: uv(0, 0), dir: uv(0, 1)},
+        [RIGHT]: {start: uv(n, 0), dir: uv(0, 1)},
+    };
+    const fix = fix_params[edge];
+    for (let i = 0; i <= n; i++) {
+        const here = fix.start.add(fix.dir.scalar(i));
+        patch.setConditionUV(here, fixCorner(between(start, end, i/n)));
+    }
+}
+
+function square_trio(n) {
+    const A = p3d(0, 0, 0);
+    const B = p3d(1, 0, 0);
+    const C = p3d(1, 1, 0);
+    const D = p3d(0, 1, 0);
+    const E = p3d(0, 0, 1);
+    const F = p3d(1, 0, 1);
+    const G = p3d(1, 1, 1);
+    const H = p3d(0, 1, 1);
+
+    const bottom = new Patch(n);
+    const right = new Patch(n);
+    const top = new Patch(n);
+
+    fixPatchEdge(bottom, BOTTOM, A, B);
+    fixPatchEdge(bottom, LEFT, A, D);
+    fixPatchEdge(bottom, TOP, D, C);
+
+    gluePatchEdges(bottom, RIGHT, right, BOTTOM);
+
+    fixPatchEdge(right, LEFT, B, F);
+    fixPatchEdge(right, RIGHT, C, G);
+
+    gluePatchEdges(right, TOP, top, RIGHT);
+
+    fixPatchEdge(top, BOTTOM, E, F);
+    fixPatchEdge(top, LEFT, E, H);
+    fixPatchEdge(top, TOP, H, G);
+
+    return [bottom, right, top];
+}
+
 export function renderResult() {
     const cos = Math.cos;
     const sin = Math.sin;
@@ -464,7 +529,7 @@ export function renderResult() {
     // const patches = half_cylinder(20, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
     // const patches = cylinder(20, () => 1, () => 1, () => .5);
     // const patches = half_cylinder(20, () => 1, () => .5);
-    const patches = square_pair(20);
+    const patches = square_trio(20);
     const { scene, camera, renderer } = createScene();
     patches.forEach(patch => {
         scene.add(patch.mesh);
