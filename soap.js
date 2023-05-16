@@ -23,6 +23,7 @@ export function createMesh(n = 20) {
     const geometry = new THREE.PlaneGeometry(2, 2, n, n);
     const wireframeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
     const material = new THREE.MeshNormalMaterial();
+    material.flatShading = true;
     // Make material double sided.
     material.side = THREE.DoubleSide;
     const mesh = new THREE.Mesh(geometry, material);
@@ -137,6 +138,20 @@ class FixCorner {
 
 function fixCorner(point) {
     return new FixCorner(point);
+}
+
+class PointFn {
+    constructor(fn) {
+        this.fn = fn;
+    }
+
+    apply(patch_point) {
+        patch_point.setPoint(this.fn());
+    }
+}
+
+function pointFn(fn) {
+    return new PointFn(fn);
 }
 
 class AverageCorner {
@@ -335,7 +350,7 @@ function gluePatches(leftPatch, rightPatch, n, leftStart, leftDir, leftOrtho, ri
     }
 }
 
-function cylinder(n, r, h) {
+function cylinder(n, r1fn, r2fn, hfn) {
     const leftPatch = new Patch(n);
     const rightPatch = new Patch(n);
     const sin = Math.sin;
@@ -343,10 +358,10 @@ function cylinder(n, r, h) {
     const pi = Math.PI;
     for (let i = 0; i <= n; i++) {
         const ratio = i / n;
-        leftPatch.setCondition(0, i, fixCorner(p3d(r * cos(pi * ratio), r * sin(pi * ratio), h)));
-        leftPatch.setCondition(n, i, fixCorner(p3d(r * cos(pi * ratio), r * sin(pi * ratio), -h)));
-        rightPatch.setCondition(0, i, fixCorner(p3d(r * cos(pi + pi * ratio), r * sin(pi + pi * ratio), h)));
-        rightPatch.setCondition(n, i, fixCorner(p3d(r * cos(pi + pi * ratio), r * sin(pi + pi * ratio), -h)));
+        leftPatch.setCondition(0, i, pointFn(() => p3d(r1fn() * cos(pi * ratio), r2fn() * sin(pi * ratio), hfn())));
+        leftPatch.setCondition(n, i, pointFn(() => p3d(r2fn() * cos(pi * ratio), r1fn() * sin(pi * ratio), -hfn())));
+        rightPatch.setCondition(0, i, pointFn(() => p3d(r1fn() * cos(pi + pi * ratio), r2fn() * sin(pi + pi * ratio), hfn())));
+        rightPatch.setCondition(n, i, pointFn(() => p3d(r2fn() * cos(pi + pi * ratio), r1fn() * sin(pi + pi * ratio), -hfn())));
     }
     gluePatches(leftPatch, rightPatch, n, uv(0, n), uv(1, 0), uv(0, -1), uv(0, 0), uv(1, 0), uv(0, 1));
     gluePatches(leftPatch, rightPatch, n, uv(0, 0), uv(1, 0), uv(0, 1), uv(0, n), uv(1, 0), uv(0, -1));
@@ -354,7 +369,10 @@ function cylinder(n, r, h) {
 }
 
 export function renderResult() {
-    const patches = cylinder(20, 1, 1);
+    const cos = Math.cos;
+    const sin = Math.sin;
+    let t = 0;
+    const patches = cylinder(30, () => 1 + 0.9 * cos(t), () => 1 + 0.9 * sin(t), () => 1);
     const { scene, camera, renderer } = createScene();
     patches.forEach(patch => {
         scene.add(patch.mesh);
@@ -366,6 +384,7 @@ export function renderResult() {
     // Trivial animation.
     const animate = function () {
         requestAnimationFrame(animate);
+        t += .001;
         patches.forEach(patch => patch.apply());
         patches.forEach(patch => patch.update());
         renderer.render(scene, camera);
