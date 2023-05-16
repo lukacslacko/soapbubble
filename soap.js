@@ -26,6 +26,9 @@ export function createMesh(n = 20) {
     material.flatShading = true;
     // Make material double sided.
     material.side = THREE.DoubleSide;
+    // Apply some transparency to the material.
+    material.transparent = true;
+    material.opacity = .5;
     const mesh = new THREE.Mesh(geometry, material);
     const wireframe = new THREE.Mesh(geometry, wireframeMaterial);
 
@@ -186,6 +189,28 @@ function segmentEdge(segment_start, segment_end) {
     return new SegmentEdge(segment_start, segment_end);
 }
 
+class MirrorEdge {
+    constructor(plane_point, plane_normal, neighbors, inside) {
+        this.plane_point = plane_point;
+        this.plane_normal = plane_normal.normalize();
+        this.neighbors = neighbors;
+        this.inside = inside;
+    }
+
+    apply(patch_point) {
+        let points = this.neighbors.map(neighbor => neighbor.getPoint());
+        const inside_point = this.inside.getPoint();
+        const inside_mirror = inside_point.add(this.plane_normal.multiply(2 * (this.plane_point.subtract(inside_point).dot(this.plane_normal))));
+        points.push(inside_mirror);
+        points.push(inside_point);
+        patch_point.setPoint(averageOfPoints(points));
+    }
+}
+
+function mirrorEdge(plane_point, plane_normal, neighbors, inside) {
+    return new MirrorEdge(plane_point, plane_normal, neighbors, inside);
+}
+
 class Condition {
     constructor(patch_point, condition) {
         this.patch_point = patch_point;
@@ -341,7 +366,7 @@ function gluePatches(leftPatch, rightPatch, n, leftStart, leftDir, leftOrtho, ri
         const rightHere = rightStart.add(rightDir.scalar(i));
         const rightInside = rightHere.add(rightOrtho);
         const corner = new AverageCorner([
-            leftPatch.getPatchPoint(leftHere.add(leftDir)), 
+            leftPatch.getPatchPoint(leftHere.add(leftDir)),
             leftPatch.getPatchPoint(leftHere.sub(leftDir)),
             leftPatch.getPatchPoint(leftInside),
             rightPatch.getPatchPoint(rightInside)]);
@@ -368,11 +393,49 @@ function cylinder(n, r1fn, r2fn, hfn) {
     return [leftPatch, rightPatch];
 }
 
+function half_cylinder(n, rfn, hfn) {
+    const leftPatch = new Patch(n);
+    const rightPatch = new Patch(n);
+    const sin = Math.sin;
+    const cos = Math.cos;
+    const pi = Math.PI;
+    for (let i = 0; i <= n; i++) {
+        const ratio = i / n;
+        leftPatch.setCondition(0, i, pointFn(() => p3d(rfn() * cos(pi * ratio), rfn() * sin(pi * ratio), hfn())));
+        rightPatch.setCondition(0, i, pointFn(() => p3d(rfn() * cos(pi + pi * ratio), rfn() * sin(pi + pi * ratio), hfn())));
+
+        let leftNeighbors = [];
+        let rightNeighbors = [];
+        if (i > 0 && i < n) {
+            leftNeighbors = [leftPatch.getPatchPoint(uv(n, i - 1)), leftPatch.getPatchPoint(uv(n, i + 1))];
+            rightNeighbors = [rightPatch.getPatchPoint(uv(n, i - 1)), rightPatch.getPatchPoint(uv(n, i + 1))];
+        }
+        leftPatch.setCondition(
+            n, i,
+            mirrorEdge(
+                p3d(0, 0, 0),
+                p3d(0, 0, 1),
+                leftNeighbors,
+                leftPatch.getPatchPoint(uv(n - 1, i))));
+        rightPatch.setCondition(
+            n, i,
+            mirrorEdge(
+                p3d(0, 0, 0),
+                p3d(0, 0, 1),
+                rightNeighbors,
+                rightPatch.getPatchPoint(uv(n - 1, i))));
+
+    }
+    gluePatches(leftPatch, rightPatch, n, uv(0, n), uv(1, 0), uv(0, -1), uv(0, 0), uv(1, 0), uv(0, 1));
+    gluePatches(leftPatch, rightPatch, n, uv(0, 0), uv(1, 0), uv(0, 1), uv(0, n), uv(1, 0), uv(0, -1));
+    return [leftPatch, rightPatch];
+}
+
 export function renderResult() {
     const cos = Math.cos;
     const sin = Math.sin;
     let t = 0;
-    const patches = cylinder(30, () => 1 + 0.9 * cos(t), () => 1 + 0.9 * sin(t), () => 1);
+    const patches = half_cylinder(20, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
     const { scene, camera, renderer } = createScene();
     patches.forEach(patch => {
         scene.add(patch.mesh);
