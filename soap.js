@@ -12,6 +12,13 @@ export function createCube() {
 // Set up a scene, camera, and renderer.
 export function createScene() {
     const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0x404040));
+    let pointLight = new THREE.PointLight(0xffffff, 1);
+    pointLight.position.set(25, 50, 25);
+    scene.add(pointLight);
+    let pointLight2 = new THREE.PointLight(0xffffff, 2);
+    pointLight2.position.set(-10, -20, -25);
+    scene.add(pointLight2);
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -22,8 +29,10 @@ export function createScene() {
 export function createMesh(n = 20) {
     const geometry = new THREE.PlaneGeometry(2, 2, n, n);
     const wireframeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
-    const material = new THREE.MeshNormalMaterial();
-    material.flatShading = true;
+    // const material = new THREE.MeshNormalMaterial();
+    // material.flatShading = true;
+    const randomHue = Math.random();
+    const material = new THREE.MeshPhongMaterial({ color: new THREE.Color().setHSL(randomHue, 1, .5), specular: 0x111111, shininess: 200 });
     // Make material double sided.
     material.side = THREE.DoubleSide;
     // Apply some transparency to the material.
