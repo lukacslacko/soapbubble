@@ -293,14 +293,15 @@ class Patch {
     getPatchPoint(uv) {
         const row = uv.u;
         const column = uv.v;
-        return new PatchPoint(this, 3 * (row * (this.mesh.geometry.parameters.widthSegments + 1) + column));
+        return new PatchPoint(this, 3 * (row * (this.mesh.geometry.parameters.widthSegments + 1) + column), uv);
     }
 }
 
 class PatchPoint {
-    constructor(patch, index) {
+    constructor(patch, index, uv) {
         this.patch = patch;
         this.index = index;
+        this.uv = uv;
     }
 
     getPoint() {
@@ -473,6 +474,31 @@ function gluePatchEdges(patch1, edge1, patch2, edge2) {
     gluePatches(patch1, patch2, n, glue1.start, glue1.dir, glue1.ortho, glue2.start, glue2.dir, glue2.ortho);
 }
 
+function gluePatchCorners(corners) {
+    console.log(corners);
+    const n = corners[0][0].n;
+    const cornerUVs = {
+        [[TOP, LEFT]]: uv(0, n),
+        [[TOP, RIGHT]]: uv(n, n),
+        [[BOTTOM, LEFT]]: uv(0, 0),
+        [[BOTTOM, RIGHT]]: uv(n, 0),
+    };
+    const neighborUVs = {
+        [[TOP, LEFT]]: [uv(0, n - 1), uv(1, n)],
+        [[TOP, RIGHT]]: [uv(n - 1, n), uv(n, n - 1)],
+        [[BOTTOM, LEFT]]: [uv(0, 1), uv(1, 0)],
+        [[BOTTOM, RIGHT]]: [uv(n - 1, 0), uv(n, 1)],
+    }
+    let corner_patch_points = corners.map(([patch, one, two]) => patch.getPatchPoint(cornerUVs[[one, two]]));
+    let neighbor_patch_points = [];
+    for (let [patch, one, two] of corners) {
+        neighbor_patch_points = neighbor_patch_points.concat(neighborUVs[[one, two]].map(uv => patch.getPatchPoint(uv)));
+    }
+    for (let patch_point of corner_patch_points) {
+        patch_point.patch.setConditionUV(patch_point.uv, new AverageCorner(neighbor_patch_points));
+    }
+}
+
 function fixPatchEdge(patch, edge, start, end) {
     const n = patch.n;
     const fix_params = {
@@ -524,13 +550,81 @@ function square_trio(n) {
     return [bottom, right, top];
 }
 
+function scherk(n, floors, a) {
+    let patches = [];
+    for (let floor = 0; floor < floors; floor++) {
+        const A = () => p3d(0, -a, floor);
+        const B = () => p3d(a, 0, floor);
+        const C = () => p3d(0, a, floor);
+        const D = () => p3d(-a, 0, floor);
+
+        const P = () => p3d(0, 0, floor);
+
+        const E = () => p3d(0, -a, floor + 1);
+        const F = () => p3d(a, 0, floor + 1);
+        const G = () => p3d(0, a, floor + 1);
+        const H = () => p3d(-a, 0, floor + 1);
+
+        const Q = () => p3d(0, 0, floor + 1);
+
+        const patchA = new Patch(n);
+        const patchB = new Patch(n);
+        const patchC = new Patch(n);
+        const patchD = new Patch(n);
+
+        patches.push(patchA);
+        patches.push(patchB);
+        patches.push(patchC);
+        patches.push(patchD);
+
+        fixPatchEdge(patchA, LEFT, A, E);
+        fixPatchEdge(patchB, LEFT, B, F);
+        fixPatchEdge(patchC, LEFT, C, G);
+        fixPatchEdge(patchD, LEFT, D, H);
+
+        if (floor == 0) {
+            fixPatchEdge(patchA, BOTTOM, A, P);
+            fixPatchEdge(patchB, BOTTOM, B, P);
+            fixPatchEdge(patchC, BOTTOM, C, P);
+            fixPatchEdge(patchD, BOTTOM, D, P);
+        } else {
+            gluePatchEdges(patchA, BOTTOM, patches[patches.length - 8], TOP);
+            gluePatchEdges(patchB, BOTTOM, patches[patches.length - 7], TOP);
+            gluePatchEdges(patchC, BOTTOM, patches[patches.length - 6], TOP);
+            gluePatchEdges(patchD, BOTTOM, patches[patches.length - 5], TOP);
+            gluePatchCorners([
+                [patchA, BOTTOM, RIGHT], [patchB, BOTTOM, RIGHT], [patchC, BOTTOM, RIGHT], [patchD, BOTTOM, RIGHT],
+                [patches[patches.length - 8], TOP, RIGHT], [patches[patches.length - 7], TOP, RIGHT], [patches[patches.length - 6], TOP, RIGHT], [patches[patches.length - 5], TOP, RIGHT]
+            ]);
+        }
+
+        if (floor == floors - 1) {
+            fixPatchEdge(patchA, TOP, E, Q);
+            fixPatchEdge(patchB, TOP, F, Q);
+            fixPatchEdge(patchC, TOP, G, Q);
+            fixPatchEdge(patchD, TOP, H, Q);
+        }
+
+        if (floor % 2 == 0) {
+            gluePatchEdges(patchA, RIGHT, patchB, RIGHT);
+            gluePatchEdges(patchC, RIGHT, patchD, RIGHT);
+        } else {
+            gluePatchEdges(patchA, RIGHT, patchD, RIGHT);
+            gluePatchEdges(patchB, RIGHT, patchC, RIGHT);
+        }
+    }
+
+    return patches;
+}
+
 export function renderResult() {
     const cos = Math.cos;
     const sin = Math.sin;
     // const patches = half_cylinder(20, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
     // const patches = cylinder(20, () => 1, () => 1, () => 1 + 0.5 * sin(t*20));
     // const patches = half_cylinder(20, () => 1, () => .5);
-    const patches = square_trio(20);
+    // const patches = square_trio(20);
+    const patches = scherk(20, 6, 2);
     const { scene, camera, renderer } = createScene();
     patches.forEach(patch => {
         scene.add(patch.mesh);
