@@ -103,16 +103,14 @@ function nearestPointOnSegment(point, segmentStart, segmentEnd) {
     const segment = segmentEnd.subtract(segmentStart);
     const segmentLength = segment.magnitude();
     const segmentDirection = segment.normalize();
-    const pointDirection = point.subtract(segmentStart);
-    const pointDirectionLength = pointDirection.magnitude();
-    const pointDirectionDirection = pointDirection.normalize();
-    const dot = segmentDirection.dot(pointDirectionDirection);
+    const pointVector = point.subtract(segmentStart);
+    const dot = segmentDirection.dot(pointVector);
     if (dot <= 0) {
         return segmentStart;
-    } else if (dot >= 1) {
+    } else if (dot >= segmentLength) {
         return segmentEnd;
     } else {
-        return segmentStart.add(segmentDirection.multiply(dot * segmentLength));
+        return segmentStart.add(segmentDirection.multiply(dot));
     }
 }
 
@@ -154,7 +152,10 @@ class SegmentEdge {
     }
 
     apply(patch_point) {
-        const point = patch_point.getPoint();
+        let indices = [patch_point.index - 3, patch_point.index + 3, patch_point.index - (patch_point.patch.n + 1) * 3, patch_point.index + (patch_point.patch.n + 1) * 3];
+        indices = indices.filter(index => index >= 0 && index < patch_point.patch.mesh.geometry.attributes.position.array.length);
+        const points = indices.map(index => new PatchPoint(patch_point.patch, index).getPoint());
+        const point = averageOfPoints(points);
         const nearest = nearestPointOnSegment(point, this.segment_start, this.segment_end);
         patch_point.setPoint(nearest);
     }
@@ -181,7 +182,7 @@ class Condition {
 
 function condition(patch, row, column, condition) {
     return new Condition(
-        new PatchPoint(patch, row * (patch.mesh.geometry.parameters.widthSegments + 1) + column), condition);
+        new PatchPoint(patch, 3* (row * (patch.mesh.geometry.parameters.widthSegments + 1) + column)), condition);
 }
 
 class Patch {
@@ -266,7 +267,7 @@ export function addMouseRotation(camera, renderer) {
 }
 
 export function renderResult() {
-    const patch = new Patch(30);
+    const patch = new Patch(15);
     patch.setConditions(
         [fixCorner(p3d(-1, -1, 0)), fixCorner(p3d(-1, 1, 0)), fixCorner(p3d(1, 1, 0)), fixCorner(p3d(1, -1, 0))], 
         [
