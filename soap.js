@@ -21,12 +21,14 @@ export function createScene() {
 
 export function createMesh(n = 20) {
     const geometry = new THREE.PlaneGeometry(2, 2, n, n);
-    const material = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
-    // const material = new THREE.MeshNormalMaterial();
+    const wireframeMaterial = new THREE.MeshBasicMaterial({color: 0xffffff, wireframe: true});
+    const material = new THREE.MeshNormalMaterial();
     // Make material double sided.
     material.side = THREE.DoubleSide;
     const mesh = new THREE.Mesh(geometry, material);
-    return mesh;
+    const wireframe = new THREE.Mesh(geometry, wireframeMaterial);
+    
+    return {mesh, wireframe};
 }
 
 // Make the mesh wave.
@@ -187,7 +189,9 @@ function condition(patch, row, column, condition) {
 
 class Patch {
     constructor(n) {
-        this.mesh = createMesh(n);
+        const {mesh, wireframe} = createMesh(n);
+        this.mesh = mesh;
+        this.wireframe = wireframe;
         this.n = n;
     }
 
@@ -231,6 +235,7 @@ class Patch {
         this.conditions.forEach(condition => condition.update());
         this.mesh.geometry.attributes.position.needsUpdate = true;
         this.mesh.geometry.computeVertexNormals();
+        this.wireframe.geometry.attributes.position.needsUpdate = true;
     }
 }
 
@@ -267,17 +272,18 @@ export function addMouseRotation(camera, renderer) {
 }
 
 export function renderResult() {
-    const patch = new Patch(15);
+    const patch = new Patch(25);
     patch.setConditions(
-        [fixCorner(p3d(-1, -1, 0)), fixCorner(p3d(-1, 1, 0)), fixCorner(p3d(1, 1, 0)), fixCorner(p3d(1, -1, 0))], 
+        [fixCorner(p3d(-1, -1, 1)), fixCorner(p3d(-1, 1, -1)), fixCorner(p3d(1, 1, 1)), fixCorner(p3d(1, -1, -1))], 
         [
-            segmentEdge(p3d(-1, -1, 0), p3d(-1, 1, 0)), 
-            segmentEdge(p3d(-1, 1, 0), p3d(1, 1, 0)),
-            segmentEdge(p3d(1, 1, 0), p3d(1, -1, 0)),
-            segmentEdge(p3d(1, -1, 0), p3d(-1, -1, 0))
+            segmentEdge(p3d(-1, -1, 1), p3d(-1, 1, -1)), 
+            segmentEdge(p3d(-1, 1, -1), p3d(1, 1, 1)),
+            segmentEdge(p3d(1, 1, 1), p3d(1, -1, -1)),
+            segmentEdge(p3d(1, -1, -1), p3d(-1, -1, 1))
         ]);
     const { scene, camera, renderer } = createScene();
     scene.add(patch.mesh);
+    scene.add(patch.wireframe);
     addMouseRotation(camera, renderer);
     camera.position.z = 5;
     camera.position.y = 0;
