@@ -150,10 +150,13 @@ function averageOfPoints(points, center) {
 }
 
 function fourPointApproximation(pair1, pair2) {
+    /*
     const len1 = pair1[0].subtract(pair1[1]).magnitude();
     const len2 = pair2[0].subtract(pair2[1]).magnitude();
     const ratio = len1 / (len1 + len2);
     return between(between(pair1[0], pair1[1], .5), between(pair2[0], pair2[1], .5), ratio);
+    */
+   return averageOfPoints(pair1.concat(pair2), new Point3D(0, 0, 0));
 }
 
 class FixCorner {
