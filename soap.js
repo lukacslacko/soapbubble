@@ -30,11 +30,11 @@ export function createMesh(n = 20) {
     const geometry = new THREE.PlaneGeometry(2, 2, n, n);
     const wireframeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
     // const material = new THREE.MeshNormalMaterial();
-    // material.flatShading = true;
     const randomHue = Math.random();
     const material = new THREE.MeshPhongMaterial({ color: new THREE.Color().setHSL(randomHue, 1, .5), specular: 0x111111, shininess: 200 });
     // Make material double sided.
     material.side = THREE.DoubleSide;
+    // material.flatShading = true;
     // Apply some transparency to the material.
     // material.transparent = true;
     // material.opacity = .5;
@@ -252,13 +252,22 @@ function make_condition(patch, row, column, condition) {
 }
 
 class Patch {
-    constructor(n) {
+    constructor(n, estimate = p3d(0, 0, 0)) {
         const { mesh, wireframe } = createMesh(n);
         this.mesh = mesh;
         this.wireframe = wireframe;
         this.n = n;
         this.nextArray = new Float32Array(this.mesh.geometry.attributes.position.array);
         this.conditions = [];
+        for (let x = 0; x < this.n; x++) {
+            for (let y = 0; y < this.n; y++) {
+                const index = (x * (this.n + 1) + y) * 3;
+                console.log(estimate);
+                this.mesh.geometry.attributes.position.array[index] = x/n + estimate.x;
+                this.mesh.geometry.attributes.position.array[index + 1] = y/n + estimate.y;
+                this.mesh.geometry.attributes.position.array[index + 2] = estimate.z;
+            }
+        }
     }
 
     setConditionUV(uv, condition) {
@@ -576,10 +585,10 @@ function scherk(n, floors, a) {
 
         const Q = () => p3d(0, 0, floor + 1);
 
-        const patchA = new Patch(n);
-        const patchB = new Patch(n);
-        const patchC = new Patch(n);
-        const patchD = new Patch(n);
+        const patchA = new Patch(n, P());
+        const patchB = new Patch(n, P());
+        const patchC = new Patch(n, P());
+        const patchD = new Patch(n, P());
 
         patches.push(patchA);
         patches.push(patchB);
@@ -625,6 +634,35 @@ function scherk(n, floors, a) {
 
     return patches;
 }
+
+/*
+
+function squarePatch(x, y, z) {
+    // TODO: Implement this.
+}
+
+function glueSquarePatches(patches, n) {
+    // TODO: Implement this.
+}
+
+function scherk_doubly(n, a, b) {
+    let square_patches = []
+    for (let x = 0; x < a; x++) {
+        for (let y = 0; y < b; y++) {
+            if (x % 2 == 0) {
+                square_patches.push(squarePatch(2*x, 2*y+1, -1));
+            }
+            if (y % 2 == 0) {
+                square_patches.push(squarePatch(2*x+1, 2*y, -1));
+            }
+            if (x+y % 2 == 0) {
+                square_patches.push(squarePatch(2*x+1, 2*y+1, 0));
+            }
+        }   
+    }
+    return glueSquarePatches(square_patches, n);
+}
+*/
 
 export function renderResult() {
     const cos = Math.cos;
