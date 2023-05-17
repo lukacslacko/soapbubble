@@ -149,6 +149,13 @@ function averageOfPoints(points, center) {
     return center.add(sum.divide(points.length));
 }
 
+function fourPointApproximation(pair1, pair2) {
+    const len1 = pair1[0].subtract(pair1[1]).magnitude();
+    const len2 = pair2[0].subtract(pair2[1]).magnitude();
+    const ratio = len1 / (len1 + len2);
+    return between(between(pair1[0], pair1[1], .5), between(pair2[0], pair2[1], .5), ratio);
+}
+
 class FixCorner {
     constructor(point) {
         this.point = point;
@@ -218,12 +225,15 @@ class MirrorEdge {
     }
 
     apply(patch_point) {
-        let points = this.neighbors.map(neighbor => neighbor.getPoint());
+        const pair1 = this.neighbors.map(neighbor => neighbor.getPoint());
         const inside_point = this.inside.getPoint();
         const inside_mirror = inside_point.add(this.plane_normal.multiply(2 * (this.plane_point.subtract(inside_point).dot(this.plane_normal))));
-        points.push(inside_mirror);
-        points.push(inside_point);
-        patch_point.setPoint(averageOfPoints(points, patch_point.getPoint()));
+        const pair2 = [inside_point, inside_mirror];
+        if (pair1.length == 2 && pair2.length == 2) {
+            patch_point.setPoint(fourPointApproximation(pair1, pair2));
+        } else {
+            patch_point.setPoint(averageOfPoints(pair1.concat(pair2), patch_point.getPoint()));
+        }
     }
 }
 
@@ -262,7 +272,6 @@ class Patch {
         for (let x = 0; x < this.n; x++) {
             for (let y = 0; y < this.n; y++) {
                 const index = (x * (this.n + 1) + y) * 3;
-                console.log(estimate);
                 this.mesh.geometry.attributes.position.array[index] = x/n + estimate.x;
                 this.mesh.geometry.attributes.position.array[index + 1] = y/n + estimate.y;
                 this.mesh.geometry.attributes.position.array[index + 2] = estimate.z;
@@ -281,9 +290,9 @@ class Patch {
     apply() {
         for (let x = 1; x < this.n; x++) {
             for (let y = 1; y < this.n; y++) {
-                const points = [this.getPatchPoint(uv(x - 1, y)), this.getPatchPoint(uv(x + 1, y)), this.getPatchPoint(uv(x, y - 1)), this.getPatchPoint(uv(x, y + 1))];
-                const actual_points = points.map(point => point.getPoint());
-                const average = averageOfPoints(actual_points, this.getPatchPoint(uv(x, y)).getPoint());
+                const pair1 = [this.getPatchPoint(uv(x - 1, y)).getPoint(), this.getPatchPoint(uv(x + 1, y)).getPoint()];
+                const pair2 = [this.getPatchPoint(uv(x, y - 1)).getPoint(), this.getPatchPoint(uv(x, y + 1)).getPoint()];
+                const average = fourPointApproximation(pair1, pair2);
                 const index = (x * (this.n + 1) + y) * 3;
                 this.nextArray[index] = average.x;
                 this.nextArray[index + 1] = average.y;
@@ -493,7 +502,6 @@ function gluePatchEdges(patch1, edge1, patch2, edge2) {
 }
 
 function gluePatchCorners(corners) {
-    console.log(corners);
     const n = corners[0][0].n;
     const cornerUVs = {
         [[TOP, LEFT]]: uv(0, n),
@@ -639,10 +647,16 @@ function scherk(n, floors, a) {
 
 function squarePatch(x, y, z) {
     // TODO: Implement this.
+    // Create a logical square patch with the center at 1/2 * (x,y,z).
+    // These square patches will be turned into real patches by glueSquarePatches.
 }
 
-function glueSquarePatches(patches, n) {
+function glueSquarePatches(square_patches, n) {
     // TODO: Implement this.
+    // Create a patch for each square patch and
+    // 1) fix their edges if they are on the boundary
+    // 2) glue them together if they are adjacent
+    // 3) glue their corners together if they are adjacent.
 }
 
 function scherk_doubly(n, a, b) {
@@ -667,11 +681,11 @@ function scherk_doubly(n, a, b) {
 export function renderResult() {
     const cos = Math.cos;
     const sin = Math.sin;
-    // const patches = half_cylinder(20, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
+    const patches = half_cylinder(20, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
     // const patches = cylinder(20, () => 1, () => 1, () => 1 + 0.5 * sin(t*20));
     // const patches = half_cylinder(20, () => 1, () => .5);
     // const patches = square_trio(20);
-    const patches = scherk(20, 6, 2);
+    // const patches = scherk(20, 6, 2);
     const { scene, camera, renderer } = createScene();
     patches.forEach(patch => {
         scene.add(patch.mesh);
