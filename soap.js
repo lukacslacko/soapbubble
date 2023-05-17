@@ -34,7 +34,7 @@ export function createMesh(n = 20) {
     const material = new THREE.MeshPhongMaterial({ color: new THREE.Color().setHSL(randomHue, 1, .5), specular: 0x111111, shininess: 200 });
     // Make material double sided.
     material.side = THREE.DoubleSide;
-    // material.flatShading = true;
+    material.flatShading = true;
     // Apply some transparency to the material.
     // material.transparent = true;
     // material.opacity = .5;
@@ -430,6 +430,26 @@ function cylinder(n, r1fn, r2fn, hfn) {
     return [leftPatch, rightPatch];
 }
 
+function quad_cylinder(n, r1fn, r2fn, hfn) {
+    const patches = [new Patch(n), new Patch(n), new Patch(n), new Patch(n)];
+    const sin = Math.sin;
+    const cos = Math.cos;
+    const pi = Math.PI;
+    for (let idx = 0; idx < 4; idx++) {
+        const next = (idx+1) % 4;
+        const leftPatch = patches[idx];
+        const rightPatch = patches[next];
+        const angle = pi * idx / 2;
+        for (let i = 0; i <= n; i++) {
+            const ratio = i / n;
+            leftPatch.setCondition(0, i, pointFn(() => p3d(2 + r1fn() * cos(angle + pi * ratio), r2fn() * sin(angle + pi * ratio), hfn())));
+            leftPatch.setCondition(n, i, pointFn(() => p3d(2 + r2fn() * cos(angle + pi * ratio), r1fn() * sin(angle + pi * ratio), -hfn())));
+        }
+        gluePatches(leftPatch, rightPatch, n, uv(0, n), uv(1, 0), uv(0, -1), uv(0, 0), uv(1, 0), uv(0, 1));
+    }
+    return patches;
+}
+
 function half_cylinder(n, rfn, hfn) {
     const leftPatch = new Patch(n);
     const rightPatch = new Patch(n);
@@ -681,7 +701,7 @@ function scherk_doubly(n, a, b) {
 export function renderResult() {
     const cos = Math.cos;
     const sin = Math.sin;
-    const patches = half_cylinder(20, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
+    const patches = quad_cylinder(20, () => 1, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
     // const patches = cylinder(20, () => 1, () => 1, () => 1 + 0.5 * sin(t*20));
     // const patches = half_cylinder(20, () => 1, () => .5);
     // const patches = square_trio(20);
