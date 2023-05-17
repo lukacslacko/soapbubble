@@ -442,10 +442,10 @@ function quad_cylinder(n, r1fn, r2fn, hfn) {
         const angle = pi * idx / 2;
         for (let i = 0; i <= n; i++) {
             const ratio = i / n;
-            leftPatch.setCondition(0, i, pointFn(() => p3d(2 + r1fn() * cos(angle + pi * ratio), r2fn() * sin(angle + pi * ratio), hfn())));
-            leftPatch.setCondition(n, i, pointFn(() => p3d(2 + r2fn() * cos(angle + pi * ratio), r1fn() * sin(angle + pi * ratio), -hfn())));
+            leftPatch.setCondition(i, 0, pointFn(() => p3d(2 + r1fn() * cos(angle + pi/2 * ratio), r2fn() * sin(angle + pi/2 * ratio), hfn())));
+            leftPatch.setCondition(i, n, pointFn(() => p3d(2 + r2fn() * cos(angle + pi/2 * ratio), r1fn() * sin(angle + pi/2 * ratio), -hfn())));
         }
-        gluePatches(leftPatch, rightPatch, n, uv(0, n), uv(1, 0), uv(0, -1), uv(0, 0), uv(1, 0), uv(0, 1));
+        gluePatchEdges(leftPatch, RIGHT, rightPatch, LEFT);
     }
     return patches;
 }
