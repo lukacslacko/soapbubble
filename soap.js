@@ -430,6 +430,21 @@ function cylinder(n, r1fn, r2fn, hfn) {
     return [leftPatch, rightPatch];
 }
 
+function single_patch_cylinder(n, r1fn, r2fn, hfn) {
+    const patch = new Patch(n);
+    const sin = Math.sin;
+    const cos = Math.cos;
+    const pi = Math.PI;
+    for (let i = 0; i <= n; i++) {
+        const ratio = 2 * i / n;
+        patch.setCondition(i, 0, pointFn(() => p3d(-2+r1fn() * cos(pi * ratio), r2fn() * sin(pi * ratio), hfn())));
+        patch.setCondition(i, n, pointFn(() => p3d(-2+r1fn() * cos(pi * ratio), r2fn() * sin(pi * ratio), -hfn())));
+    }
+    gluePatchEdges(patch, LEFT, patch, RIGHT);
+    return [patch];
+}
+
+
 function quad_cylinder(n, r1fn, r2fn, hfn) {
     const patches = [new Patch(n), new Patch(n), new Patch(n), new Patch(n)];
     const sin = Math.sin;
@@ -701,7 +716,7 @@ function scherk_doubly(n, a, b) {
 export function renderResult() {
     const cos = Math.cos;
     const sin = Math.sin;
-    const patches = quad_cylinder(20, () => 1, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5));
+    const patches = quad_cylinder(20, () => 1, () => 1, () => .5).concat(cylinder(20, () => 1, () => 1, () => .5)).concat(single_patch_cylinder(20, () => 1, () => 1, () => .5));
     // const patches = cylinder(20, () => 1, () => 1, () => 1 + 0.5 * sin(t*20));
     // const patches = half_cylinder(20, () => 1, () => .5);
     // const patches = square_trio(20);
